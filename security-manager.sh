@@ -827,6 +827,7 @@ install_all() {
     install_geoban
     install_remnawave_reverse_proxy
     install_remnawave_backup_restore
+    install_and_run_nginx_get_ban
     log INFO "Все выбранные компоненты установлены"
 }
 
