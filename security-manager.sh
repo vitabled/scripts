@@ -142,28 +142,45 @@ pause_screen() {
 }
 
 create_shortcut() {
-    local script_path
-    script_path="$(readlink -f "$0")"
+    local script_path=""
+    script_path="$(readlink -f "$0" 2>/dev/null || true)"
 
-    [[ -f "$script_path" ]] || die "Не удалось определить путь к скрипту"
+    if [[ -n "$script_path" && -f "$script_path" && "$script_path" != /dev/fd/* ]]; then
+        chmod +x "$script_path"
+        ln -sfn "$script_path" "$SHORTCUT_PATH"
+        log INFO "Создан shortcut: ${SHORTCUT_NAME} -> ${script_path}"
+        return 0
+    fi
 
-    chmod +x "$script_path"
-    ln -sfn "$script_path" "$SHORTCUT_PATH"
-
-    log INFO "Создан shortcut: ${SHORTCUT_NAME} -> ${script_path}"
+    log WARN "Скрипт запущен без постоянного пути. Shortcut будет создан после установки в /usr/local/bin."
 }
 
 install_self_to_system() {
-    local current_path
-    current_path="$(readlink -f "$0")"
+    local target_script="/usr/local/bin/security-manager-script"
 
-    install -Dm755 "$current_path" /usr/local/bin/security-manager-script
-    ln -sfn /usr/local/bin/security-manager-script "$SHORTCUT_PATH"
+    if [[ -n "${SELF_INSTALL_SOURCE_URL:-}" ]]; then
+        log STEP "Скачивание скрипта в ${target_script}"
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsSL "$SELF_INSTALL_SOURCE_URL" -o "$target_script"
+        else
+            wget -qO "$target_script" "$SELF_INSTALL_SOURCE_URL"
+        fi
+    else
+        local current_path
+        current_path="$(readlink -f "$0" 2>/dev/null || true)"
 
-    log INFO "Скрипт установлен в /usr/local/bin/security-manager-script"
+        [[ -n "$current_path" && -f "$current_path" && "$current_path" != /dev/fd/* ]] || \
+            die "Не удалось определить путь к скрипту для установки"
+
+        install -Dm755 "$current_path" "$target_script"
+    fi
+
+    chmod +x "$target_script"
+    ln -sfn "$target_script" "$SHORTCUT_PATH"
+
+    log INFO "Скрипт установлен в ${target_script}"
     log INFO "Команда быстрого доступа: ${SHORTCUT_NAME}"
 }
-
 ############################
 # Validation
 ############################
@@ -611,7 +628,6 @@ fail2ban_menu() {
 # Preparation
 ############################
 prepare_system() {
-    require_root
     check_os
 
     require_cmd apt-get
@@ -1276,7 +1292,6 @@ main() {
 
     if [[ "${1:-}" == "--install-shortcut-only" ]]; then
         check_os
-        create_shortcut
         install_self_to_system
         exit 0
     fi
