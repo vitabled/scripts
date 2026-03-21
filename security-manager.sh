@@ -822,12 +822,12 @@ install_remnawave_backup_restore() {
 install_all() {
     install_base_packages
     system_update
-    install_traffic_guard_and_manager
+    toggle_bbr
+    install_traffic_guard
     fail2ban_install
     install_geoban
-    install_remnawave_reverse_proxy
-    install_remnawave_backup_restore
     install_and_run_nginx_get_ban
+    apply_antiddos_iptables
     log INFO "Все выбранные компоненты установлены"
 }
 
@@ -1324,7 +1324,7 @@ print_menu() {
     echo "13) Установить ssh-ключ"
     echo "14) Включить/Выключить BBR (сейчас $(bbr_status_text))"
     echo "15) Тесты сервера"
-    echo "16) Установить всё сразу"
+    echo "16) Установить всё сразу(кроме утилит remnawave)"
     echo "17) Показать статус"
     echo "0) Выход"
     echo "============================================"
