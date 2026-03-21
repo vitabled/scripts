@@ -765,10 +765,13 @@ install_pro_manager() {
     log INFO "Для использования менеджера введи команду: rknpidor"
 }
 
-install_traffic_guard_and_manager() {
-    install_traffic_guard
-    install_pro_manager
-}
+##################################################################
+######Единая функция для установки traffic guard и менеджера######
+##################################################################
+#install_traffic_guard_and_manager() {
+#    install_traffic_guard
+#    install_pro_manager
+#}
 
 install_geoban() {
     log STEP "Настройка GeoBan"
@@ -1312,21 +1315,22 @@ print_menu() {
     echo "============================================"
     echo "1) Установить базовые пакеты"
     echo "2) Обновить пакеты"
-    echo "3) Установить Traffic Guard + Pro Manager"
-    echo "4) Fail2Ban"
-    echo "5) Установить GeoBan"
-    echo "6) Установить remnawave-reverse-proxy"
-    echo "7) Установить remnawave backup & restore"
-    echo "8) Управление портами"
-    echo "9) Просмотр статистики"
-    echo "10) Iptables antiDDoS защита"
-    echo "11) Бан адресов по GET-запросам nginx в access.log"
-    echo "12) Полезные команды"
-    echo "13) Установить ssh-ключ"
-    echo "14) Включить/Выключить BBR (сейчас $(bbr_status_text))"
-    echo "15) Тесты сервера"
-    echo "16) Установить всё сразу(кроме утилит remnawave)"
-    echo "17) Показать статус"
+    echo "3) Установить Traffic Guard"
+    echo "4) Установить Traffic Guard Pro Manager"
+    echo "5) Fail2Ban"
+    echo "6) Установить GeoBan"
+    echo "7) Установить remnawave-reverse-proxy"
+    echo "8) Установить remnawave backup & restore"
+    echo "9) Управление портами"
+    echo "10) Просмотр статистики"
+    echo "11) Iptables antiDDoS защита"
+    echo "12) Бан адресов по GET-запросам nginx в access.log"
+    echo "13) Полезные команды"
+    echo "14) Установить ssh-ключ"
+    echo "15) Включить/Выключить BBR (сейчас $(bbr_status_text))"
+    echo "16) Тесты сервера"
+    echo "17) Установить всё сразу(кроме утилит remnawave)"
+    echo "18) Показать статус"
     echo "0) Выход"
     echo "============================================"
     echo "Команда для быстрого доступа: security-manager"
@@ -1341,21 +1345,22 @@ menu_loop() {
         case "$choice" in
             1) install_base_packages; pause_screen ;;
             2) system_update; pause_screen ;;
-            3) install_traffic_guard_and_manager; pause_screen ;;
-            4) fail2ban_menu ;;
-            5) install_geoban; pause_screen ;;
-            6) install_remnawave_reverse_proxy; pause_screen ;;
-            7) install_remnawave_backup_restore; pause_screen ;;
-            8) ports_menu ;;
-            9) statistics_menu ;;
-            10) apply_antiddos_iptables; pause_screen ;;
-            11) install_and_run_nginx_get_ban; pause_screen ;;
-            12) show_useful_commands; pause_screen ;;
-            13) ssh_key_menu ;;
-            14) toggle_bbr; pause_screen ;;
-            15) server_tests_menu ;;
-            16) install_all; pause_screen ;;
-            17) show_status; pause_screen ;;
+            3) install_traffic_guard; pause_screen ;;
+            4) install_pro_manager; pause_screen ;;
+            5) fail2ban_menu ;;
+            6) install_geoban; pause_screen ;;
+            7) install_remnawave_reverse_proxy; pause_screen ;;
+            8) install_remnawave_backup_restore; pause_screen ;;
+            9) ports_menu ;;
+            10) statistics_menu ;;
+            11) apply_antiddos_iptables; pause_screen ;;
+            12) install_and_run_nginx_get_ban; pause_screen ;;
+            13) show_useful_commands; pause_screen ;;
+            14) ssh_key_menu ;;
+            15) toggle_bbr; pause_screen ;;
+            16) server_tests_menu ;;
+            17) install_all; pause_screen ;;
+            18) show_status; pause_screen ;;
             0)
             log INFO "Выход"
             exit 0
