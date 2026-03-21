@@ -4,6 +4,7 @@ set -Eeuo pipefail
 ############################
 # Config
 ############################
+
 TG_INSTALL_URL="https://raw.githubusercontent.com/dotX12/traffic-guard/master/install.sh"
 TG_ANTISCANNER_URL="https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/refs/heads/main/public/antiscanner.list"
 TG_GOV_URL="https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/refs/heads/main/public/government_networks.list"
@@ -11,6 +12,9 @@ TG_GOV_URL="https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/
 GEOBAN_DIR="/opt/geoban"
 GEOBAN_LIST_URL="https://github.com/vitabled/geofiles/releases/download/lists/banned_ips.txt"
 GEOBAN_LIST_FILE="${GEOBAN_DIR}/ipban.txt"
+
+NGINX_BAN_SCRIPT_PATH="/usr/local/bin/nginx-get-ban.sh"
+NGINX_BAN_CRON_FILE="/etc/cron.d/security-manager-nginx-ban"
 
 PRO_MANAGER_URL="https://raw.githubusercontent.com/DonMatteoVPN/TrafficGuard-auto/refs/heads/main/install-trafficguard.sh"
 REMNAWAVE_PROXY_URL="https://raw.githubusercontent.com/eGamesAPI/remnawave-reverse-proxy/refs/heads/main/install_remnawave.sh"
@@ -661,6 +665,79 @@ system_update() {
 ############################
 # Main modules
 ############################
+
+install_nginx_get_ban_script() {
+    log STEP "Установка скрипта бана адресов по GET-запросам nginx"
+
+    ensure_netfilter_persistent
+
+    cat > "$NGINX_BAN_SCRIPT_PATH" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ACCESS_LOG="/var/log/nginx/access.log"
+BAN_LIST_TMP="/var/tmp/ban_ddos"
+BAN_SCRIPT_TMP="/var/tmp/ban.sh"
+SITE_BANLIST="/var/www/site/banlist.txt"
+
+[[ -f "$ACCESS_LOG" ]] || exit 0
+
+grep -i "get / http/1.1" "$ACCESS_LOG" \
+  | awk '{print $1}' \
+  | sort \
+  | uniq -c \
+  | sort -n \
+  | awk '$1>50 {print $2}' > "$BAN_LIST_TMP"
+
+: > "$BAN_SCRIPT_TMP"
+
+if [[ -s "$BAN_LIST_TMP" ]]; then
+    awk '{print "/usr/sbin/iptables -I INPUT -s " $1 " -j DROP";}' "$BAN_LIST_TMP" >> "$BAN_SCRIPT_TMP"
+    bash "$BAN_SCRIPT_TMP"
+fi
+
+: > "$BAN_SCRIPT_TMP"
+: > "$ACCESS_LOG"
+
+mkdir -p "$(dirname "$SITE_BANLIST")"
+: > "$SITE_BANLIST"
+
+/usr/sbin/iptables -S | awk '{print $4}' > "$SITE_BANLIST" || true
+
+if command -v netfilter-persistent >/dev/null 2>&1; then
+    netfilter-persistent save || true
+else
+    /usr/sbin/iptables-save > /etc/iptables/rules.v4
+fi
+EOF
+
+    chmod +x "$NGINX_BAN_SCRIPT_PATH"
+
+    cat > "$NGINX_BAN_CRON_FILE" <<EOF
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 3 * * * root $NGINX_BAN_SCRIPT_PATH >> /var/log/nginx-get-ban.log 2>&1
+EOF
+
+    chmod 644 "$NGINX_BAN_CRON_FILE"
+
+    log INFO "Скрипт создан: $NGINX_BAN_SCRIPT_PATH"
+    log INFO "Cron добавлен: ежедневно в 03:00"
+}
+
+run_nginx_get_ban_script_now() {
+    [[ -x "$NGINX_BAN_SCRIPT_PATH" ]] || die "Скрипт ещё не установлен"
+    log STEP "Запуск nginx GET-ban скрипта"
+    "$NGINX_BAN_SCRIPT_PATH"
+    log INFO "Скрипт выполнен"
+}
+
+install_and_run_nginx_get_ban() {
+    install_nginx_get_ban_script
+    run_nginx_get_ban_script_now
+}
+
 install_traffic_guard() {
     log STEP "Установка Traffic Guard"
     fetch_url_head "$TG_INSTALL_URL"
@@ -1241,12 +1318,13 @@ print_menu() {
     echo "8) Управление портами"
     echo "9) Просмотр статистики"
     echo "10) Iptables antiDDoS защита"
-    echo "11) Полезные команды"
-    echo "12) Установить ssh-ключ"
-    echo "13) Включить/Выключить BBR (сейчас $(bbr_status_text))"
-    echo "14) Тесты сервера"
-    echo "15) Установить всё сразу"
-    echo "16) Показать статус"
+    echo "11) Бан адресов по GET-запросам nginx в access.log"
+    echo "12) Полезные команды"
+    echo "13) Установить ssh-ключ"
+    echo "14) Включить/Выключить BBR (сейчас $(bbr_status_text))"
+    echo "15) Тесты сервера"
+    echo "16) Установить всё сразу"
+    echo "17) Показать статус"
     echo "0) Выход"
     echo "============================================"
     echo "Команда для быстрого доступа: security-manager"
@@ -1269,20 +1347,21 @@ menu_loop() {
             8) ports_menu ;;
             9) statistics_menu ;;
             10) apply_antiddos_iptables; pause_screen ;;
-            11) show_useful_commands; pause_screen ;;
-            12) ssh_key_menu ;;
-            13) toggle_bbr; pause_screen ;;
-            14) server_tests_menu ;;
-            15) install_all; pause_screen ;;
-            16) show_status; pause_screen ;;
+            11) install_and_run_nginx_get_ban; pause_screen ;;
+            12) show_useful_commands; pause_screen ;;
+            13) ssh_key_menu ;;
+            14) toggle_bbr; pause_screen ;;
+            15) server_tests_menu ;;
+            16) install_all; pause_screen ;;
+            17) show_status; pause_screen ;;
             0)
-                log INFO "Выход"
-                exit 0
-                ;;
-            *)
-                log WARN "Неверный пункт меню"
-                pause_screen
-                ;;
+            log INFO "Выход"
+            exit 0
+            ;;
+        *)
+            log WARN "Неверный пункт меню"
+            pause_screen
+            ;;
         esac
     done
 }
