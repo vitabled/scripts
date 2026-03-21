@@ -59,7 +59,7 @@ die() {
 
 on_error() {
     local line="$1"
-    log ERROR "Ошибка на строке ${line}. Установка прервана."
+    log ERROR "Ошибка на строке ${line}. Выполнение прервано."
 }
 trap 'on_error $LINENO' ERR
 
@@ -90,7 +90,6 @@ check_os() {
             ;;
     esac
 }
-
 
 fetch_url_head() {
     local url="$1"
@@ -152,6 +151,17 @@ create_shortcut() {
     ln -sfn "$script_path" "$SHORTCUT_PATH"
 
     log INFO "Создан shortcut: ${SHORTCUT_NAME} -> ${script_path}"
+}
+
+install_self_to_system() {
+    local current_path
+    current_path="$(readlink -f "$0")"
+
+    install -Dm755 "$current_path" /usr/local/bin/security-manager-script
+    ln -sfn /usr/local/bin/security-manager-script "$SHORTCUT_PATH"
+
+    log INFO "Скрипт установлен в /usr/local/bin/security-manager-script"
+    log INFO "Команда быстрого доступа: ${SHORTCUT_NAME}"
 }
 
 ############################
@@ -615,7 +625,6 @@ prepare_system() {
         apt_install curl
     fi
 
-    
     create_shortcut
 }
 
@@ -1263,6 +1272,15 @@ menu_loop() {
 }
 
 main() {
+    require_root
+
+    if [[ "${1:-}" == "--install-shortcut-only" ]]; then
+        check_os
+        create_shortcut
+        install_self_to_system
+        exit 0
+    fi
+
     prepare_system
     menu_loop
 }
