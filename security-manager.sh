@@ -823,11 +823,12 @@ install_all() {
     install_base_packages
     system_update
     toggle_bbr
-    install_traffic_guard
-    fail2ban_install
-    install_geoban
     install_and_run_nginx_get_ban
     apply_antiddos_iptables
+    install_traffic_guard
+    install_geoban
+    fail2ban_install
+    install_pro_manager
     log INFO "Все выбранные компоненты установлены"
 }
 
