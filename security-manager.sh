@@ -827,7 +827,6 @@ install_all() {
     system_update
     toggle_bbr
     install_and_run_nginx_get_ban
-    apply_antiddos_iptables
     install_traffic_guard
     install_geoban
     fail2ban_install
@@ -953,57 +952,6 @@ statistics_menu() {
 }
 
 ############################
-# anti-DDoS iptables
-############################
-iptables_mangle_add_unique() {
-    if iptables -t mangle -C PREROUTING "$@" 2>/dev/null; then
-        return 0
-    fi
-    iptables -t mangle -A PREROUTING "$@"
-}
-
-apply_antiddos_iptables() {
-    log STEP "Применение anti-DDoS iptables правил"
-
-    ensure_netfilter_persistent
-
-    modprobe iptable_mangle 2>/dev/null || true
-    modprobe nf_conntrack 2>/dev/null || true
-
-    iptables_mangle_add_unique -m conntrack --ctstate INVALID -j DROP
-    iptables_mangle_add_unique -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
-    iptables_mangle_add_unique -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
-
-    iptables_mangle_add_unique -p tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags FIN,SYN FIN,SYN -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags SYN,RST SYN,RST -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags FIN,RST FIN,RST -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags FIN,ACK FIN -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags ACK,URG URG -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags ACK,FIN FIN -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags ACK,PSH PSH -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags ALL ALL -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags ALL NONE -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP
-    iptables_mangle_add_unique -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
-
-    iptables_mangle_add_unique -s 224.0.0.0/3 -j DROP
-    iptables_mangle_add_unique -s 169.254.0.0/16 -j DROP
-    iptables_mangle_add_unique -s 172.16.0.0/12 -j DROP
-    iptables_mangle_add_unique -s 192.0.2.0/24 -j DROP
-    iptables_mangle_add_unique -s 192.168.0.0/16 -j DROP
-    iptables_mangle_add_unique -s 10.0.0.0/8 -j DROP
-    iptables_mangle_add_unique -s 0.0.0.0/8 -j DROP
-    iptables_mangle_add_unique -s 240.0.0.0/5 -j DROP
-    iptables_mangle_add_unique -s 127.0.0.0/8 ! -i lo -j DROP
-
-    iptables_mangle_add_unique -p icmp -j DROP
-
-    save_firewall_rules
-    log INFO "anti-DDoS iptables правила применены"
-}
 
 ############################
 # Useful commands
@@ -1323,7 +1271,7 @@ print_menu() {
     echo "8) Установить remnawave backup & restore"
     echo "9) Управление портами"
     echo "10) Просмотр статистики"
-    echo "11) Iptables antiDDoS защита"
+
     echo "12) Бан адресов по GET-запросам nginx в access.log"
     echo "13) Полезные команды"
     echo "14) Установить ssh-ключ"
@@ -1353,7 +1301,6 @@ menu_loop() {
             8) install_remnawave_backup_restore; pause_screen ;;
             9) ports_menu ;;
             10) statistics_menu ;;
-            11) apply_antiddos_iptables; pause_screen ;;
             12) install_and_run_nginx_get_ban; pause_screen ;;
             13) show_useful_commands; pause_screen ;;
             14) ssh_key_menu ;;
