@@ -324,7 +324,7 @@ set_default_ports_policy() {
     local ssh_port
     ssh_port="$(current_ssh_port)"
 
-    local tcp_ports=("22" "2222" "443" "16385")
+    local tcp_ports=("22" "2222" "443")
     local extra_port
     local exists=false
 
@@ -877,7 +877,7 @@ ports_menu() {
         echo "============================================"
         echo "           Управление портами"
         echo "============================================"
-        echo "1) Закрыть все порты, кроме OpenSSH/22, 2222, 443"
+        echo "1) Закрыть все порты, кроме OpenSSH/22, 2222, 443, 16385"
         echo "2) Открыть TCP-порты (через запятую)"
         echo "3) Закрыть TCP-порты (через запятую)"
         echo "4) Открыть UDP-порты (через запятую)"
