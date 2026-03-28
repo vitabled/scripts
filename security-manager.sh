@@ -14,9 +14,6 @@ GEOBAN_DIR="/opt/geoban"
 GEOBAN_LIST_URL="https://github.com/vitabled/geofiles/releases/download/lists/banned_ips.txt"
 GEOBAN_LIST_FILE="${GEOBAN_DIR}/ipban.txt"
 
-NGINX_BAN_SCRIPT_PATH="/usr/local/bin/nginx-get-ban.sh"
-NGINX_BAN_CRON_FILE="/etc/cron.d/security-manager-nginx-ban"
-
 PRO_MANAGER_URL="https://raw.githubusercontent.com/DonMatteoVPN/TrafficGuard-auto/refs/heads/main/install-trafficguard.sh"
 REMNAWAVE_PROXY_URL="https://raw.githubusercontent.com/eGamesAPI/remnawave-reverse-proxy/refs/heads/main/install_remnawave.sh"
 REMNAWAVE_BACKUP_RESTORE_URL="https://raw.githubusercontent.com/distillium/remnawave-backup-restore/main/backup-restore.sh"
@@ -756,7 +753,6 @@ install_all() {
     install_base_packages
     system_update
     toggle_bbr
-    install_and_run_nginx_get_ban
     install_traffic_guard
     install_geoban
     fail2ban_install
@@ -1201,8 +1197,6 @@ print_menu() {
     echo "8) Установить remnawave backup & restore"
     echo "9) Управление портами"
     echo "10) Просмотр статистики"
-
-    echo "12) Бан адресов по GET-запросам nginx в access.log"
     echo "13) Полезные команды"
     echo "14) Установить ssh-ключ"
     echo "15) Включить/Выключить BBR (сейчас $(bbr_status_text))"
@@ -1231,7 +1225,6 @@ menu_loop() {
             8) install_remnawave_backup_restore; pause_screen ;;
             9) ports_menu ;;
             10) statistics_menu ;;
-            12) install_and_run_nginx_get_ban; pause_screen ;;
             13) show_useful_commands; pause_screen ;;
             14) ssh_key_menu ;;
             15) toggle_bbr; pause_screen ;;
