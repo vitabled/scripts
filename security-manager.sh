@@ -510,9 +510,9 @@ fail2ban_install() {
         die "Некорректный формат userip. Используй x.x.x.x или x.x.x.x/x, несколько значений через пробел."
     fi
 
-    while true; do
-        read -r -p "Введи email для destemail: " useremail && break
-    done
+
+    read -r -p "Введи email для destemail: " useremail
+
 
     mkdir -p /etc/fail2ban/jail.d
 
