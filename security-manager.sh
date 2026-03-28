@@ -8,6 +8,7 @@ set -Eeuo pipefail
 TG_INSTALL_URL="https://raw.githubusercontent.com/dotX12/traffic-guard/master/install.sh"
 TG_ANTISCANNER_URL="https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/refs/heads/main/public/antiscanner.list"
 TG_GOV_URL="https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/refs/heads/main/public/government_networks.list"
+TG_SKIPA_URL="https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/refs/heads/main/public/skipa.list"
 
 GEOBAN_DIR="/opt/geoban"
 GEOBAN_LIST_URL="https://github.com/vitabled/geofiles/releases/download/lists/banned_ips.txt"
@@ -651,7 +652,7 @@ prepare_system() {
 install_base_packages() {
     log STEP "Установка базовых пакетов"
     apt-get update -y
-    apt_install ca-certificates curl wget git python3 python3-pip iptables-persistent netfilter-persistent openssh-client iproute2
+    apt_install ca-certificates curl wget git python3 python3-pip openssh-client iproute2
     log INFO "Базовые пакеты установлены"
 }
 
@@ -665,78 +666,6 @@ system_update() {
 ############################
 # Main modules
 ############################
-
-install_nginx_get_ban_script() {
-    log STEP "Установка скрипта бана адресов по GET-запросам nginx"
-
-    ensure_netfilter_persistent
-
-    cat > "$NGINX_BAN_SCRIPT_PATH" <<'EOF'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
-ACCESS_LOG="/var/log/nginx/access.log"
-BAN_LIST_TMP="/var/tmp/ban_ddos"
-BAN_SCRIPT_TMP="/var/tmp/ban.sh"
-SITE_BANLIST="/var/www/site/banlist.txt"
-
-[[ -f "$ACCESS_LOG" ]] || exit 0
-
-grep -i "get / http/1.1" "$ACCESS_LOG" \
-  | awk '{print $1}' \
-  | sort \
-  | uniq -c \
-  | sort -n \
-  | awk '$1>50 {print $2}' > "$BAN_LIST_TMP"
-
-: > "$BAN_SCRIPT_TMP"
-
-if [[ -s "$BAN_LIST_TMP" ]]; then
-    awk '{print "/usr/sbin/iptables -I INPUT -s " $1 " -j DROP";}' "$BAN_LIST_TMP" >> "$BAN_SCRIPT_TMP"
-    bash "$BAN_SCRIPT_TMP"
-fi
-
-: > "$BAN_SCRIPT_TMP"
-: > "$ACCESS_LOG"
-
-mkdir -p "$(dirname "$SITE_BANLIST")"
-: > "$SITE_BANLIST"
-
-/usr/sbin/iptables -S | awk '{print $4}' > "$SITE_BANLIST" || true
-
-if command -v netfilter-persistent >/dev/null 2>&1; then
-    netfilter-persistent save || true
-else
-    /usr/sbin/iptables-save > /etc/iptables/rules.v4
-fi
-EOF
-
-    chmod +x "$NGINX_BAN_SCRIPT_PATH"
-
-    cat > "$NGINX_BAN_CRON_FILE" <<EOF
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-
-0 3 * * * root $NGINX_BAN_SCRIPT_PATH >> /var/log/nginx-get-ban.log 2>&1
-EOF
-
-    chmod 644 "$NGINX_BAN_CRON_FILE"
-
-    log INFO "Скрипт создан: $NGINX_BAN_SCRIPT_PATH"
-    log INFO "Cron добавлен: ежедневно в 03:00"
-}
-
-run_nginx_get_ban_script_now() {
-    [[ -x "$NGINX_BAN_SCRIPT_PATH" ]] || die "Скрипт ещё не установлен"
-    log STEP "Запуск nginx GET-ban скрипта"
-    "$NGINX_BAN_SCRIPT_PATH"
-    log INFO "Скрипт выполнен"
-}
-
-install_and_run_nginx_get_ban() {
-    install_nginx_get_ban_script
-    run_nginx_get_ban_script_now
-}
 
 install_traffic_guard() {
     log STEP "Установка Traffic Guard"
@@ -755,6 +684,7 @@ install_traffic_guard() {
     traffic-guard full \
         -u "$TG_ANTISCANNER_URL" \
         -u "$TG_GOV_URL" \
+        -u "$TG_SKIPA_URL" \
         --enable-logging
 
     log INFO "Traffic Guard установлен и настроен"
@@ -975,7 +905,7 @@ show_useful_commands() {
     echo
     echo "Traffic Guard:"
     echo "  traffic-guard --help"
-    echo "  traffic-guard full -u ${TG_ANTISCANNER_URL} -u ${TG_GOV_URL} --enable-logging"
+    echo "  traffic-guard full -u ${TG_ANTISCANNER_URL} -u ${TG_GOV_URL} -u ${TG_SKIPA_URL} --enable-logging"
     echo
     echo "Fail2Ban:"
     echo "  fail2ban-client status"
