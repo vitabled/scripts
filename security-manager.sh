@@ -511,7 +511,7 @@ fail2ban_install() {
     fi
 
     while true; do
-        read -r -p "Введи email для destemail: " useremail
+        read -r -p "Введи email для destemail: " useremail && break
     done
 
     mkdir -p /etc/fail2ban/jail.d
