@@ -324,7 +324,7 @@ set_default_ports_policy() {
     local ssh_port
     ssh_port="$(current_ssh_port)"
 
-    local tcp_ports=("22" "2222" "443")
+    local tcp_ports=("22" "2222" "443" "16385")
     local extra_port
     local exists=false
 
@@ -348,6 +348,7 @@ set_default_ports_policy() {
     done
 
     iptables_add_unique "$PORTS_CHAIN" -p udp --dport 443 -j RETURN
+    iptables_add_unique "$PORTS_CHAIN" -p udp --dport 16385 -j RETURN
     iptables_add_unique "$PORTS_CHAIN" -p tcp -j DROP
     iptables_add_unique "$PORTS_CHAIN" -p udp -j DROP
     iptables_add_unique "$PORTS_CHAIN" -j RETURN
@@ -374,6 +375,27 @@ close_tcp_port() {
 
     save_firewall_rules
 }
+
+open_udp_port() {
+    local port="$1"
+    ensure_ports_chain
+
+    iptables_delete_all "$PORTS_CHAIN" -p udp --dport "$port" -j DROP
+    iptables_insert_unique "$PORTS_CHAIN" -p udp --dport "$port" -j RETURN
+
+    save_firewall_rules
+}
+
+close_udp_port() {
+    local port="$1"
+    ensure_ports_chain
+
+    iptables_delete_all "$PORTS_CHAIN" -p udp --dport "$port" -j RETURN
+    iptables_insert_unique "$PORTS_CHAIN" -p udp --dport "$port" -j DROP
+
+    save_firewall_rules
+}
+
 
 change_ssh_port() {
     ensure_netfilter_persistent
@@ -781,11 +803,11 @@ ports_close_all_except_defaults() {
 
     log INFO "Портовая политика применена"
     echo "Разрешены TCP: 22, 2222, 443 и текущий SSH порт"
-    echo "Разрешён UDP: 443"
+    echo "Разрешён UDP: 443, 16385"
     show_ports_chain_status
 }
 
-ports_open_custom() {
+ports_open_custom_tcp() {
     local input
     read -r -p "Введи TCP-порты для открытия через запятую (например 80,8080,8443): " input
 
@@ -801,7 +823,7 @@ ports_open_custom() {
     show_ports_chain_status
 }
 
-ports_close_custom() {
+ports_close_custom_tcp() {
     local input
     read -r -p "Введи TCP-порты для закрытия через запятую (например 80,8080,8443): " input
 
@@ -817,6 +839,38 @@ ports_close_custom() {
     show_ports_chain_status
 }
 
+ports_open_custom_udp() {
+    local input
+    read -r -p "Введи UDP-порты для открытия через запятую (например 80,8080,8443): " input
+
+    local PORTS_ARRAY=()
+    parse_ports_csv "$input" || die "Некорректный список портов"
+
+    local p
+    for p in "${PORTS_ARRAY[@]}"; do
+        open_udp_port "$p"
+        log INFO "Открыт UDP порт ${p}"
+    done
+
+    show_ports_chain_status
+}
+
+ports_close_custom_tcp() {
+    local input
+    read -r -p "Введи UDP-порты для закрытия через запятую (например 80,8080,8443): " input
+
+    local PORTS_ARRAY=()
+    parse_ports_csv "$input" || die "Некорректный список портов"
+
+    local p
+    for p in "${PORTS_ARRAY[@]}"; do
+        close_udp_port "$p"
+        log INFO "Закрыт UDP порт ${p}"
+    done
+
+    show_ports_chain_status
+}
+
 ports_menu() {
     while true; do
         clear
@@ -826,8 +880,10 @@ ports_menu() {
         echo "1) Закрыть все порты, кроме OpenSSH/22, 2222, 443"
         echo "2) Открыть TCP-порты (через запятую)"
         echo "3) Закрыть TCP-порты (через запятую)"
-        echo "4) Поменять порт SSH"
-        echo "5) Показать статус правил портов"
+        echo "4) Открыть UDP-порты (через запятую)"
+        echo "5) Закрыть UDP-порты (через запятую)"
+        echo "6) Поменять порт SSH"
+        echo "7) Показать статус правил портов"
         echo "0) Назад"
         echo "============================================"
 
@@ -836,10 +892,12 @@ ports_menu() {
 
         case "$subchoice" in
             1) ports_close_all_except_defaults; pause_screen ;;
-            2) ports_open_custom; pause_screen ;;
-            3) ports_close_custom; pause_screen ;;
-            4) change_ssh_port; pause_screen ;;
-            5) show_ports_chain_status; pause_screen ;;
+            2) ports_open_custom_tcp; pause_screen ;;
+            3) ports_close_custom_tcp; pause_screen ;;
+            4) ports_open_custom_udp; pause_screen ;;
+            5) ports_close_custom_udp; pause_screen ;;
+            6) change_ssh_port; pause_screen ;;
+            7) show_ports_chain_status; pause_screen ;;
             0) break ;;
             *) log WARN "Неверный подпункт меню"; pause_screen ;;
         esac
