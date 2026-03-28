@@ -18,6 +18,9 @@ PRO_MANAGER_URL="https://raw.githubusercontent.com/DonMatteoVPN/TrafficGuard-aut
 REMNAWAVE_PROXY_URL="https://raw.githubusercontent.com/eGamesAPI/remnawave-reverse-proxy/refs/heads/main/install_remnawave.sh"
 REMNAWAVE_BACKUP_RESTORE_URL="https://raw.githubusercontent.com/distillium/remnawave-backup-restore/main/backup-restore.sh"
 
+MTPROTOMAX_URL="https://raw.githubusercontent.com/SamNet-dev/MTProxyMax/main/install.sh"
+YANDEX_CLOUD_MANAGER_URL="https://raw.githubusercontent.com/Mastachok/ya-vps-autostart/main/install.sh"
+
 LOG_FILE="/var/log/server_protection_setup.log"
 
 SHORTCUT_NAME="security-manager"
@@ -183,6 +186,7 @@ install_self_to_system() {
     log INFO "Скрипт установлен в ${target_script}"
     log INFO "Команда быстрого доступа: ${SHORTCUT_NAME}"
 }
+
 ############################
 # Validation
 ############################
@@ -692,6 +696,20 @@ install_pro_manager() {
     log INFO "Для использования менеджера введи команду: rknpidor"
 }
 
+install_mtprotomax() {
+    log STEP "Установка MTProtoMax"
+    fetch_url_head "$MTPROTOMAX_URL"
+    bash -c "$(curl -fsSL "$MTPROTOMAX_URL")"
+    log INFO "MTProtoMax: установка завершена"
+}
+
+install_yandex_cloud_manager() {
+    log STEP "Установка YandexCloudManager скрипта"
+    fetch_url_head "$YANDEX_CLOUD_MANAGER_URL"
+    curl -fsSL "$YANDEX_CLOUD_MANAGER_URL" | bash
+    log INFO "YandexCloudManager скрипт: установка завершена"
+}
+
 ##################################################################
 ######Единая функция для установки traffic guard и менеджера######
 ##################################################################
@@ -878,8 +896,6 @@ statistics_menu() {
 }
 
 ############################
-
-############################
 # Useful commands
 ############################
 show_useful_commands() {
@@ -894,7 +910,7 @@ show_useful_commands() {
     echo "  rknpidor"
     echo
     echo "Remnawave reverse proxy installer:"
-    echo "  bash <(curl -Ls ${REMNAWAVE_PROXY_URL})"
+    echo "  remnawave-reverse"
     echo
     echo "Remnawave backup & restore:"
     echo "  ~/backup-restore.sh"
@@ -902,6 +918,12 @@ show_useful_commands() {
     echo "Traffic Guard:"
     echo "  traffic-guard --help"
     echo "  traffic-guard full -u ${TG_ANTISCANNER_URL} -u ${TG_GOV_URL} -u ${TG_SKIPA_URL} --enable-logging"
+    echo
+    echo "MTProtoMax:"
+    echo "  mtproxymax"
+    echo
+    echo "YandexCloudManager:"
+    echo "  vps-watchdog"
     echo
     echo "Fail2Ban:"
     echo "  fail2ban-client status"
@@ -1197,6 +1219,8 @@ print_menu() {
     echo "8) Установить remnawave backup & restore"
     echo "9) Управление портами"
     echo "10) Просмотр статистики"
+    echo "11) Установить MTProtoMax"
+    echo "12) Установить YandexCloudManager скрипт"
     echo "13) Полезные команды"
     echo "14) Установить ssh-ключ"
     echo "15) Включить/Выключить BBR (сейчас $(bbr_status_text))"
@@ -1225,6 +1249,8 @@ menu_loop() {
             8) install_remnawave_backup_restore; pause_screen ;;
             9) ports_menu ;;
             10) statistics_menu ;;
+            11) install_mtprotomax; pause_screen ;;
+            12) install_yandex_cloud_manager; pause_screen ;;
             13) show_useful_commands; pause_screen ;;
             14) ssh_key_menu ;;
             15) toggle_bbr; pause_screen ;;
@@ -1232,13 +1258,13 @@ menu_loop() {
             17) install_all; pause_screen ;;
             18) show_status; pause_screen ;;
             0)
-            log INFO "Выход"
-            exit 0
-            ;;
-        *)
-            log WARN "Неверный пункт меню"
-            pause_screen
-            ;;
+                log INFO "Выход"
+                exit 0
+                ;;
+            *)
+                log WARN "Неверный пункт меню"
+                pause_screen
+                ;;
         esac
     done
 }
