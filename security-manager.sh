@@ -541,11 +541,9 @@ fail2ban_change_email() {
     ensure_fail2ban_config_exists
 
     local useremail=""
-    while true; do
-        read -r -p "Введи новый email для destemail: " useremail
-        validate_email "$useremail" && break
-        log WARN "Некорректный email"
-    done
+    
+    read -r -p "Введи новый email для destemail: " useremail
+
 
     fail2ban_set_value "destemail" "$useremail"
     restart_fail2ban_service
