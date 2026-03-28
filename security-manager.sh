@@ -212,11 +212,6 @@ parse_ports_csv() {
     return 0
 }
 
-validate_email() {
-    local email="$1"
-    [[ "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]
-}
-
 validate_ip_or_cidr() {
     local value="$1"
 
@@ -495,8 +490,6 @@ fail2ban_install() {
 
     while true; do
         read -r -p "Введи email для destemail: " useremail
-        validate_email "$useremail" && break
-        log WARN "Некорректный email"
     done
 
     mkdir -p /etc/fail2ban/jail.d
