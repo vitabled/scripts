@@ -28,6 +28,7 @@ SHORTCUT_PATH="/usr/local/bin/${SHORTCUT_NAME}"
 
 FAIL2BAN_CUSTOM_FILE="/etc/fail2ban/jail.d/custom.local"
 PORTS_CHAIN="SECMGR_PORTS"
+ICMP_CHAIN="SECMGR_ICMP"
 
 ############################
 # Colors / Logging
@@ -442,6 +443,79 @@ change_ssh_port() {
 }
 
 ############################
+# ICMP management
+############################
+ensure_icmp_chain() {
+    ensure_netfilter_persistent
+
+    if ! iptables -L "$ICMP_CHAIN" -n >/dev/null 2>&1; then
+        iptables -N "$ICMP_CHAIN"
+    fi
+
+    iptables_insert_unique INPUT -j "$ICMP_CHAIN"
+}
+
+icmp_drop_rule_exists() {
+    iptables -C "$ICMP_CHAIN" -p icmp --icmp-type echo-request -j DROP 2>/dev/null
+}
+
+icmp_status_text() {
+    ensure_icmp_chain >/dev/null 2>&1 || true
+
+    if iptables -L "$ICMP_CHAIN" -n >/dev/null 2>&1 && icmp_drop_rule_exists; then
+        echo "включено (DROP echo-request)"
+    else
+        echo "выключено"
+    fi
+}
+
+disable_icmp_echo_reply() {
+    log STEP "Отключение ответа на ICMP echo-request через DROP"
+
+    ensure_icmp_chain
+
+    iptables_delete_all "$ICMP_CHAIN" -p icmp --icmp-type echo-request -j RETURN
+    iptables_insert_unique "$ICMP_CHAIN" -p icmp --icmp-type echo-request -j DROP
+    iptables_add_unique "$ICMP_CHAIN" -j RETURN
+
+    save_firewall_rules
+    log INFO "Ответ на ICMP echo-request отключён (DROP)"
+}
+
+enable_icmp_echo_reply() {
+    log STEP "Включение ответа на ICMP echo-request"
+
+    ensure_icmp_chain
+
+    iptables_delete_all "$ICMP_CHAIN" -p icmp --icmp-type echo-request -j DROP
+    iptables_add_unique "$ICMP_CHAIN" -j RETURN
+
+    save_firewall_rules
+    log INFO "Ответ на ICMP echo-request включён"
+}
+
+toggle_icmp_echo_reply() {
+    if icmp_drop_rule_exists; then
+        enable_icmp_echo_reply
+    else
+        disable_icmp_echo_reply
+    fi
+}
+
+show_icmp_chain_status() {
+    echo
+    echo "===== INPUT ====="
+    iptables -S INPUT || true
+    echo "===== ${ICMP_CHAIN} ====="
+    if iptables -L "$ICMP_CHAIN" -n >/dev/null 2>&1; then
+        iptables -S "$ICMP_CHAIN" || true
+    else
+        echo "Цепочка ${ICMP_CHAIN} ещё не создана"
+    fi
+    echo "========================="
+    echo
+}
+############################
 # SSH helpers
 ############################
 ensure_sshd_config() {
@@ -853,7 +927,7 @@ ports_open_custom_udp() {
     show_ports_chain_status
 }
 
-ports_close_custom_tcp() {
+ports_close_custom_udp() {
     local input
     read -r -p "Введи UDP-порты для закрытия через запятую (например 80,8080,8443): " input
 
@@ -902,6 +976,32 @@ ports_menu() {
     done
 }
 
+icmp_menu() {
+    while true; do
+        clear
+        echo "============================================"
+        echo "            Управление ICMP"
+        echo "============================================"
+        echo "1) Отключить ответ на ping (DROP echo-request)"
+        echo "2) Включить ответ на ping"
+        echo "3) Включить/выключить (сейчас $(icmp_status_text))"
+        echo "4) Показать статус правил ICMP"
+        echo "0) Назад"
+        echo "============================================"
+
+        read -r -p "Выбери подпункт: " subchoice
+        echo
+
+        case "$subchoice" in
+            1) disable_icmp_echo_reply; pause_screen ;;
+            2) enable_icmp_echo_reply; pause_screen ;;
+            3) toggle_icmp_echo_reply; pause_screen ;;
+            4) show_icmp_chain_status; pause_screen ;;
+            0) break ;;
+            *) log WARN "Неверный подпункт меню"; pause_screen ;;
+        esac
+    done
+}
 ############################
 # Statistics
 ############################
@@ -1241,7 +1341,7 @@ show_status() {
     else
         echo "GeoBan: не настроен"
     fi
-
+    echo "ICMP echo-request DROP: $(icmp_status_text)"
     echo "Текущий SSH порт: $(current_ssh_port)"
     echo "SSH password auth: $(ssh_password_status)"
     echo "BBR: $(bbr_status_text)"
@@ -1276,6 +1376,7 @@ print_menu() {
     echo "16) Тесты сервера"
     echo "17) Установить всё сразу(кроме утилит remnawave)"
     echo "18) Показать статус"
+    echo "19) Управление ICMP (ping)"
     echo "0) Выход"
     echo "============================================"
     echo "Команда для быстрого доступа: security-manager"
@@ -1306,6 +1407,7 @@ menu_loop() {
             16) server_tests_menu ;;
             17) install_all; pause_screen ;;
             18) show_status; pause_screen ;;
+            19) icmp_menu ;;
             0)
                 log INFO "Выход"
                 exit 0
