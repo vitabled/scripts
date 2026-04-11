@@ -1,38 +1,39 @@
 #!/bin/bash
 
-# Цвета для вывода
+# Цвета для удобства
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-echo -e "${GREEN}>>> Запуск скрипта настройки SSL для Remnawave/Remnanode...${NC}"
+echo -e "${GREEN}=== Настройка SSL сертификата для Remnawave/Remnanode ===${NC}"
 
-# 1. Определение директории
+# 1. Проверка пути установки
 if [ -d "/opt/remnanode" ]; then
     BASE_DIR="/opt/remnanode"
 elif [ -d "/opt/remnawave" ]; then
     BASE_DIR="/opt/remnawave"
 else
-    echo -e "${RED}Ошибка: Директория /opt/remnanode или /opt/remnawave не найдена!${NC}"
+    echo -e "${RED}Ошибка: Директория ноды не найдена в /opt/remnanode или /opt/remnawave${NC}"
     exit 1
 fi
 
-CERT_DIR="$BASE_DIR/certbot"
-echo -e "${GREEN}>>> Используется директория: $BASE_DIR${NC}"
-
-# 2. Запрос данных у пользователя
-read -p "Введите ваш домен (например, node.example.com): " DOMAIN
-read -p "Введите ваш Email для Certbot: " EMAIL
+# 2. Интерактивный сбор данных
+echo -e "${YELLOW}Введите данные для получения сертификата:${NC}"
+read -p "Домен (например, node.example.com): " DOMAIN
+read -p "Email для уведомлений Let's Encrypt: " EMAIL
 
 if [[ -z "$DOMAIN" || -z "$EMAIL" ]]; then
-    echo -e "${RED}Ошибка: Домен и Email обязательны.${NC}"
+    echo -e "${RED}Ошибка: Домен и Email не могут быть пустыми!${NC}"
     exit 1
 fi
 
-# 3. Подготовка папок и docker-compose для Certbot
+# 3. Создание структуры Certbot
+CERT_DIR="$BASE_DIR/certbot"
 mkdir -p "$CERT_DIR"
 cd "$CERT_DIR"
 
+echo -e "${GREEN}Создание конфигурации Certbot...${NC}"
 cat <<EOF > docker-compose.yml
 services:
   certbot:
@@ -43,14 +44,17 @@ services:
       - ./certs:/etc/letsencrypt
 EOF
 
-# 4. Работа с портом 80 (Открытие в UFW если есть)
-echo -e "${GREEN}>>> Проверка порта 80...${NC}"
+# 4. Освобождение порта 80
+echo -e "${YELLOW}Проверка порта 80...${NC}"
 if command -v ufw > /dev/null; then
     sudo ufw allow 80/tcp > /dev/null
 fi
 
-# 5. Получение сертификата
-echo -e "${GREEN}>>> Получение сертификата для $DOMAIN...${NC}"
+# Останавливаем потенциальные процессы на 80 порту (на всякий случай)
+fuser -k 80/tcp > /dev/null 2>&1
+
+# 5. Первичное получение сертификата
+echo -e "${GREEN}Запуск Certbot для домена $DOMAIN...${NC}"
 docker run --rm \
   -v "$CERT_DIR/certs:/etc/letsencrypt" \
   -v "$CERT_DIR/var-lib-letsencrypt:/var/lib/letsencrypt" \
@@ -60,40 +64,37 @@ docker run --rm \
   --email "$EMAIL" \
   -d "$DOMAIN"
 
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}>>> Сертификат успешно получен!${NC}"
-else
-    echo -e "${RED}>>> Ошибка при получении сертификата. Проверьте, что порт 80 свободен и домен направлен на IP сервера.${NC}"
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Критическая ошибка: Не удалось получить сертификат.${NC}"
     exit 1
 fi
 
-# 6. Настройка автопродления (Cron)
-CRON_JOB="0 0 28 * * cd $CERT_DIR && docker compose run --rm certbot renew && docker compose -f $BASE_DIR/docker-compose.yml restart"
+# 6. Настройка автопродления в Cron
+CRON_JOB="0 0 28 * * cd $CERT_DIR && docker compose run --rm certbot renew && cd $BASE_DIR && docker compose restart"
 (crontab -l 2>/dev/null | grep -v "certbot renew" ; echo "$CRON_JOB") | crontab -
+echo -e "${GREEN}Задача автопродления добавлена в crontab (каждое 28 число).${NC}"
 
-echo -e "${GREEN}>>> Задача на продление добавлена в crontab.${NC}"
-
-# 7. Обновление основного docker-compose.yml ноды
+# 7. Инъекция сертификатов в основной docker-compose.yml ноды
 MAIN_COMPOSE="$BASE_DIR/docker-compose.yml"
 
 if [ -f "$MAIN_COMPOSE" ]; then
-    echo -e "${GREEN}>>> Обновление конфигурации ноды...${NC}"
+    echo -e "${YELLOW}Настройка проброса сертификатов в ноду...${NC}"
     
-    # Проверяем, нет ли уже этой строки, чтобы не дублировать
-    if ! grep -q "/etc/letsencrypt:ro" "$MAIN_COMPOSE"; then
-        # Используем sed для вставки тома в секцию volumes
-        # Этот скрипт ищет строку 'volumes:' и добавляет после неё путь к сертификатам
-        sed -i "/volumes:/a \      - '$CERT_DIR/certs:/etc/letsencrypt:ro'" "$MAIN_COMPOSE"
-        echo -e "${GREEN}>>> Путь к сертификатам добавлен в volumes.${NC}"
+    # Проверяем, не добавлен ли уже этот Volume
+    if grep -q "etc/letsencrypt:ro" "$MAIN_COMPOSE"; then
+        echo -e "${GREEN}Конфигурация уже содержит пути к сертификатам.${NC}"
     else
-        echo -e "${GREEN}>>> Запись о сертификатах уже существует в docker-compose.yml.${NC}"
+        # Ищем секцию volumes внутри remnanode/remnawave и добавляем путь
+        # Используем простую замену: ищем 'volumes:' и добавляем строку после неё
+        sed -i "/volumes:/a \      - '$CERT_DIR/certs:/etc/letsencrypt:ro'" "$MAIN_COMPOSE"
+        echo -e "${GREEN}Пути к сертификатам добавлены в $MAIN_COMPOSE${NC}"
     fi
-    
-    # 8. Перезапуск ноды
-    echo -e "${GREEN}>>> Перезапуск ноды...${NC}"
+
+    # 8. Перезапуск основного приложения
+    echo -e "${GREEN}Перезапуск контейнеров...${NC}"
     cd "$BASE_DIR"
     docker compose down && docker compose up -d
-    echo -e "${GREEN}>>> Готово! Нода перезапущена с SSL.${NC}"
+    echo -e "${GREEN}Все готово! Проверьте работу ноды по HTTPS.${NC}"
 else
-    echo -e "${RED}Ошибка: Основной файл $MAIN_COMPOSE не найден для редактирования.${NC}"
+    echo -e "${RED}Файл $MAIN_COMPOSE не найден. Проброс томов не выполнен.${NC}"
 fi
