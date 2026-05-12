@@ -45,6 +45,7 @@ services:
     network_mode: host
     volumes:
       - ./certs:/etc/letsencrypt
+      - ./var-lib-letsencrypt:/var/lib/letsencrypt
 EOF
 
 # 4. Освобождение порта 80
