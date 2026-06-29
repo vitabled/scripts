@@ -8,6 +8,26 @@ NC='\033[0m'
 
 echo -e "${GREEN}>>> Запуск скрипта настройки SSL для Remnawave/Remnanode...${NC}"
 
+# 0. Парсинг аргументов командной строки
+DOMAIN=""
+EMAIL=""
+
+for i in "$@"; do
+  case $i in
+    --domain=*)
+      DOMAIN="${i#*=}"
+      shift
+      ;;
+    --email=*)
+      EMAIL="${i#*=}"
+      shift
+      ;;
+    *)
+      # Неизвестная опция
+      ;;
+  esac
+done
+
 # 1. Определение директории (автоматически)
 if [ -d "/opt/remnanode" ]; then
     BASE_DIR="/opt/remnanode"
@@ -21,19 +41,27 @@ fi
 CERT_DIR="$BASE_DIR/certbot"
 echo -e "${GREEN}>>> Используется директория: $BASE_DIR${NC}"
 
-# 2. ИНТЕРАКТИВНЫЙ ВВОД (Исправлено для curl | bash)
-echo -e "${YELLOW}Пожалуйста, введите данные (ввод через /dev/tty):${NC}"
+# 2. ИНТЕРАКТИВНЫЙ ВВОД (запрашиваем только то, что не передано в аргументах)
+if [[ -z "$DOMAIN" || -z "$EMAIL" ]]; then
+    echo -e "${YELLOW}Пожалуйста, введите недостающие данные (ввод через /dev/tty):${NC}"
+fi
 
-printf "Введите ваш домен (например, node.example.com): "
-read -r DOMAIN < /dev/tty
+if [[ -z "$DOMAIN" ]]; then
+    printf "Введите ваш домен (например, node.example.com): "
+    read -r DOMAIN < /dev/tty
+fi
 
-printf "Введите ваш Email для Certbot: "
-read -r EMAIL < /dev/tty
+if [[ -z "$EMAIL" ]]; then
+    printf "Введите ваш Email для Certbot: "
+    read -r EMAIL < /dev/tty
+fi
 
 if [[ -z "$DOMAIN" || -z "$EMAIL" ]]; then
     echo -e "${RED}Ошибка: Домен и Email обязательны!${NC}"
     exit 1
 fi
+
+echo -e "${GREEN}>>> Домен: $DOMAIN | Email: $EMAIL${NC}"
 
 # 3. Создание docker-compose для Certbot
 mkdir -p "$CERT_DIR"
